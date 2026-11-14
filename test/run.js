@@ -84,10 +84,14 @@ const PROMPT_FOR = {
   wave: { expectedRaisedFingers: 5, tolerance: 3 }, thumbsUp: { expectedRaisedFingers: 1, tolerance: 2 },
   rockOn: { expectedRaisedFingers: 2, tolerance: 2 }, fist: { expectedRaisedFingers: 0, tolerance: 2 },
   spread: { expectedRaisedFingers: 5, tolerance: 3 }, point: { expectedRaisedFingers: 1, tolerance: 2 },
+  four: { expectedRaisedFingers: 4, tolerance: 3 }, pinky: { expectedRaisedFingers: 1, tolerance: 2 },
+  shaka: { expectedRaisedFingers: 2, tolerance: 2 }, gun: { expectedRaisedFingers: 2, tolerance: 2 },
+  threeThumb: { expectedRaisedFingers: 3, tolerance: 2 }, loveYou: { expectedRaisedFingers: 3, tolerance: 2 },
 };
 function makeHand(key, rand, sloppy) {
   const [raised, thumb] = Sy.POSES[key]();
   let poly = Sy.handOutline(raised, thumb, rand, sloppy);
+  if (rand() < 0.5) poly = Sy.mirror(poly);              // left hands too
   poly = Sy.transform(poly, rand, 0.8 + rand() * 0.35, (rand() - 0.5) * 0.5, (rand() - 0.5) * 60, (rand() - 0.5) * 30);
   return poly;
 }
@@ -95,7 +99,7 @@ function pct(a, b) { return b ? Math.round(100 * a / b) : 0; }
 
 const devices = ['mouse125', 'frame60', 'touch60'];
 const N = 160;
-const rows = { human: [], A: [], B: [], C: [] };
+const rows = { human: [], A: [], B: [] };
 const shapeRows = [];
 for (let i = 0; i < N; i++) {
   const rand = Sy.rng(1000 + i), key = poseKeys[i % poseKeys.length];
@@ -108,10 +112,9 @@ for (let i = 0; i < N; i++) {
   const dy = Sc.analyze(hs);
   rows.human.push({ key, dev, shape: sh, dyn: dy });
   shapeRows.push({ key, sh });
-  const ba = Sy.botA(poly), bb = Sy.botB(poly), bc = Sy.botC(poly, { rand: Sy.rng(5000 + i) });
+  const ba = Sy.botA(poly), bb = Sy.botB(poly);
   rows.A.push({ key, shape: Sh.check(ba, PROMPT_FOR[key]), dyn: Sc.analyze(ba) });
   rows.B.push({ key, shape: Sh.check(bb, PROMPT_FOR[key]), dyn: Sc.analyze(bb) });
-  rows.C.push({ key, shape: Sh.check(bc, PROMPT_FOR[key]), dyn: Sc.analyze(bc) });
 }
 
 // negative shape tests
@@ -136,7 +139,7 @@ negResults['circle (expects 3 fingers)'] = Sh.check(circle(), { expectedRaisedFi
 const shapePass = rows.human.filter((r) => r.shape.pass).length;
 const dynPass = rows.human.filter((r) => r.dyn.band === 'pass').length;
 const both = rows.human.filter((r) => r.shape.pass && r.dyn.band === 'pass').length;
-console.log(`\nSimulated humans: ${N}  (3 devices x 8 poses x 2 sloppiness levels, outlines left slightly open)`);
+console.log(`\nSimulated humans: ${N}  (3 devices x ${poseKeys.length} poses x 2 sloppiness levels, half mirrored, outlines left slightly open)`);
 console.log(`  shape check passes:   ${shapePass}/${N}  (${pct(shapePass, N)}%)`);
 console.log(`  dynamics band=pass:   ${dynPass}/${N}  (${pct(dynPass, N)}%)`);
 console.log(`  both (final pass):    ${both}/${N}  (${pct(both, N)}%)`);
@@ -147,7 +150,7 @@ console.log(`  mean dynamics score:  ${mean(rows.human.map((r) => r.dyn.score)).
 
 console.log('Bots (same hands, fed straight to the scorer, isTrusted=true so ONLY dynamics are tested)');
 const table = [];
-for (const [k, label] of [['A', '(a) polyline, const speed'], ['B', '(b) spline, const speed'], ['C', '(c) spline, random speed + jitter']]) {
+for (const [k, label] of [['A', '(a) polyline, const speed'], ['B', '(b) spline, const speed']]) {
   const r = rows[k];
   const flagged = {}; r.forEach((x) => x.dyn.features.forEach((f) => { if (f.status === 'botLike') flagged[f.id] = (flagged[f.id] || 0) + 1; }));
   const top = Object.entries(flagged).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([id, n]) => `${id} ${pct(n, N)}%`).join(', ');
@@ -165,9 +168,9 @@ shapeRows.forEach(({ key, sh }) => { (byPose[key] = byPose[key] || []).push(sh.e
 for (const k of poseKeys) console.log(`  ${k.padEnd(9)} expected ${PROMPT_FOR[k].expectedRaisedFingers}  est: ${byPose[k].join(' ')}`);
 
 // untrusted events
-const ut = Sy.botC(makeHand('three', Sy.rng(3)), { trusted: false, rand: Sy.rng(3) });
+const ut = Sy.botB(makeHand('three', Sy.rng(3)), { trusted: false });
 const utr = Sc.analyze(ut);
-console.log(`\nUntrusted-event bot (c): score ${utr.score.toFixed(1)} band ${utr.band}`);
+console.log(`\nUntrusted-event bot (b): score ${utr.score.toFixed(1)} band ${utr.band}`);
 
 // optional real recordings
 const dir = path.join(__dirname, 'humans');
@@ -188,21 +191,21 @@ if (verbose) {
   const r = rows.human[0];
   console.log('\nFeature detail for one simulated human:');
   r.dyn.features.forEach((f) => console.log(`  ${f.name.padEnd(22)} ${f.score.toFixed(2)} ${f.status.padEnd(9)} ${f.value}`));
-  ['A', 'B', 'C'].forEach((k) => { console.log(`\nBot ${k}:`); rows[k][0].dyn.features.forEach((f) => console.log(`  ${f.name.padEnd(22)} ${f.score.toFixed(2)} ${f.status.padEnd(9)} ${f.value}`)); });
+  ['A', 'B'].forEach((k) => { console.log(`\nBot ${k}:`); rows[k][0].dyn.features.forEach((f) => console.log(`  ${f.name.padEnd(22)} ${f.score.toFixed(2)} ${f.status.padEnd(9)} ${f.value}`)); });
 }
 process.exitCode = 0;
 if (process.argv.includes('--dist')) {
   const col = (rs, id) => rs.map((r) => r.dyn.features.find((f) => f.id === id)).filter(Boolean);
   const q = (a, p) => { a = a.slice().sort((x, y) => x - y); return a[Math.floor((a.length - 1) * p)]; };
-  for (const [name, rs] of [['human', rows.human], ['C', rows.C]]) {
+  for (const [name, rs] of [['human', rows.human], ['B', rows.B]]) {
     for (const id of ['tremor', 'curvature', 'timestamps', 'speed']) {
       const sc = col(rs, id).map((f) => f.score);
       console.log(name.padEnd(6), id.padEnd(10), 'score p5/p25/p50/p95', [0.05, 0.25, 0.5, 0.95].map((p) => q(sc, p).toFixed(2)).join(' / '));
     }
   }
   const rho = rows.human.map((r) => parseFloat(r.dyn.features.find((f) => f.id === 'tremor').value.split('ratio ')[1])).filter((x) => !isNaN(x));
-  const rhoC = rows.C.map((r) => parseFloat(r.dyn.features.find((f) => f.id === 'tremor').value.split('ratio ')[1])).filter((x) => !isNaN(x));
-  console.log('rho human p5/p50/p95', [0.05, 0.5, 0.95].map((p) => q(rho, p).toFixed(1)).join(' / '), ' botC', [0.05, 0.5, 0.95].map((p) => q(rhoC, p).toFixed(1)).join(' / '));
+  const rhoB = rows.B.map((r) => parseFloat(r.dyn.features.find((f) => f.id === 'tremor').value.split('ratio ')[1])).filter((x) => !isNaN(x));
+  console.log('rho human p5/p50/p95', [0.05, 0.5, 0.95].map((p) => q(rho, p).toFixed(1)).join(' / '), ' botB', [0.05, 0.5, 0.95].map((p) => q(rhoB, p).toFixed(1)).join(' / '));
   const sl = rows.human.map((r) => parseFloat(r.dyn.features.find((f) => f.id === 'curvature').value.split('slope ')[1])).filter((x) => !isNaN(x));
   console.log('curv slope human p5/p50/p95', [0.05, 0.5, 0.95].map((p) => q(sl, p).toFixed(2)).join(' / '));
   const ink = rows.human.map((r) => r.shape.debug && r.shape.debug.inkRatio).filter(Boolean);

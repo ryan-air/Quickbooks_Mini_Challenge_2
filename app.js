@@ -1,5 +1,5 @@
 /*
- * app.js — the booth: capture, flow, ink, sound, ticket, Lab, bots, fallback game.
+ * app.js — the booth: capture, flow, ink, sound, verification bar, ticket, Lab, bots.
  * Scoring lives in scoring.js, the hand check in shape.js, the bot drawers in synth.js.
  */
 (() => {
@@ -27,9 +27,14 @@
     { text: 'Draw a hand pointing at the sky.', expectedRaisedFingers: 1, tolerance: 2, pose: 'point' },
     { text: 'Draw a hand with a rubber duck on it.', expectedRaisedFingers: null, tolerance: 1, pose: 'wave' },
     { text: 'Draw a hand reaching for the last biscuit.', expectedRaisedFingers: null, tolerance: 1, pose: 'spread' },
-    { text: 'Draw a hand holding up 4 fingers, thumb tucked.', expectedRaisedFingers: 4, tolerance: 3, pose: 'spread' },
+    { text: 'Draw a hand holding up 4 fingers, thumb tucked.', expectedRaisedFingers: 4, tolerance: 3, pose: 'four' },
     { text: 'Draw a hand giving a very small, very polite salute.', expectedRaisedFingers: null, tolerance: 1, pose: 'peace' },
     { text: 'Draw a hand that has just been told a secret.', expectedRaisedFingers: null, tolerance: 1, pose: 'wave' },
+    { text: 'Draw a hand making a pinky promise (just the pinky up).', expectedRaisedFingers: 1, tolerance: 2, pose: 'pinky' },
+    { text: 'Draw a "hang loose": thumb and pinky out.', expectedRaisedFingers: 2, tolerance: 2, pose: 'shaka' },
+    { text: 'Draw a finger gun: index out, thumb up.', expectedRaisedFingers: 2, tolerance: 2, pose: 'gun' },
+    { text: 'Draw a hand counting to three the European way (thumb, index, middle).', expectedRaisedFingers: 3, tolerance: 2, pose: 'threeThumb' },
+    { text: 'Draw an "I love you" sign: thumb, index and pinky up.', expectedRaisedFingers: 3, tolerance: 2, pose: 'loveYou' },
   ];
 
   // ───────────── copy ─────────────
@@ -105,7 +110,6 @@
     thunk() { if (!this.on || !this.ensure()) return; this.tone(110, 0, 0.16, 0.5); this.tone(55, 0.02, 0.2, 0.5); this.noise(0.07, 700, 0.8, 0.25); },
     chime() { if (!this.on || !this.ensure()) return; this.tone(880, 0, 0.5, 0.18, 'triangle'); this.tone(1320, 0.12, 0.7, 0.16, 'triangle'); },
     buzz() { if (!this.on || !this.ensure()) return; this.tone(150, 0, 0.25, 0.2, 'sawtooth'); this.tone(120, 0.14, 0.3, 0.2, 'sawtooth'); },
-    beep(f) { if (!this.ensure()) return; this.tone(f || 660, 0, 0.14, 0.2, 'square'); },   // used by the beat game even when sound is off
   };
   $('soundBtn').addEventListener('click', () => {
     snd.on = !snd.on; if (snd.on) snd.ensure();
@@ -203,6 +207,23 @@
   });
   $('hintToggle').addEventListener('change', (e) => $('hint').classList.toggle('off', !e.target.checked));
 
+  // ───────────── ghost hand: a fresh guide per round ─────────────
+  // Built from the prompt's pose, then randomly mirrored (left/right hand), tilted and scaled,
+  // so the dotted guide is never the same template twice. The bot demos trace this same outline.
+  let ghostPoly = null;
+  function makeGhost(pose) {
+    const rand = Sy.rng((Math.random() * 1e9) >>> 0);
+    const [raised, thumb] = (Sy.POSES[pose] || Sy.POSES.wave)();
+    let poly = Sy.handOutline(raised, thumb, rand, 0.35);
+    if (rand() < 0.5) poly = Sy.mirror(poly);
+    poly = Sy.transform(poly, rand, 0.86 + rand() * 0.12, (rand() - 0.5) * 0.26, (rand() - 0.5) * 50, -10 + rand() * 8);
+    ghostPoly = poly;
+    const open = Sy.chaikin(poly.slice(0, -1), 2, false);   // leave the wrist open, round the corners
+    const d = open.map((p, i) => (i ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
+    const path = $('hintPath');
+    if (path && path.setAttribute) path.setAttribute('d', d);
+  }
+
   // ───────────── mascot + bubble ─────────────
   const mascot = $('mascot');
   const setMascot = (s) => mascot.setAttribute('data-state', s);
@@ -211,6 +232,20 @@
     pokes++; mascot.classList.remove('poked'); void mascot.getBoundingClientRect(); mascot.classList.add('poked');
     if (pokes % 5 === 0) { say('Hey. Eyes up here. Draw, don’t poke.', 'Madame Eyeball, annoyed'); setMascot('smug'); setTimeout(() => { if (state !== 'thinking') setMascot(state === 'verdict' ? mascot.dataset.keep || 'idle' : 'idle'); }, 1800); }
   });
+  // ───────────── verification bar (the CAPTCHA framing) ─────────────
+  const VERIFY = {
+    idle: ['Not verified', 'Press the button and draw a hand to continue.'],
+    pending: ['Not verified', 'Draw the hand Madame Eyeball asks for, then press “That’s my hand”.'],
+    checking: ['Checking…', 'Reading your strokes.'],
+    pass: ['Verified human', 'Welcome in. You may continue.'],
+    retry: ['Almost', 'One more drawing and you are through.'],
+    fail: ['Not verified', 'That did not look like a person drawing. Try a new hand.'],
+  };
+  function setVerify(s) {
+    const bar = $('verifyBar'); if (!bar || !bar.setAttribute) return;
+    bar.setAttribute('data-state', s);
+    $('verifyHead').textContent = VERIFY[s][0]; $('verifyStatus').textContent = VERIFY[s][1];
+  }
   const pick = (arr, lastKey) => { let i; do { i = rnd(arr.length); } while (arr.length > 1 && i === lastKey.v); lastKey.v = i; return arr[i]; };
   const lf = { v: -1 }, lfail = { v: -1 }, lsh = { v: -1 }, lre = { v: -1 };
 
@@ -223,6 +258,8 @@
     clearTimeout(timerHandle);
     if (!keepStrokes) { strokes = []; cur = null; }
     prompt = pickPrompt();
+    makeGhost(prompt.pose);
+    setVerify('pending');
     state = 'draw';
     $('ticketWrap').innerHTML = '';
     $('coinOverlay').classList.add('hidden'); $('thinkOverlay').classList.add('hidden');
@@ -246,7 +283,7 @@
     if (state !== 'draw') return;
     if (totalPoints() < 5) { say(EMPTY_LINE); return; }
     state = 'thinking'; clearTimeout(timerHandle); updateButtons();
-    setMascot('thinking'); say('Hmm… the lines are swirling…', 'Madame Eyeball is thinking');
+    setMascot('thinking'); say('Hmm… the lines are swirling…', 'Madame Eyeball is thinking'); setVerify('checking');
     $('thinkOverlay').classList.remove('hidden');
     snd.thunk();
     const delay = reduceMotion() ? 400 : THINK_MIN + Math.random() * (THINK_MAX - THINK_MIN);
@@ -281,10 +318,11 @@
     return { kind, egg, shape, dyn, combined: combinedScore, firstScore: pendingFirstDyn, prompt, strokes: JSON.parse(JSON.stringify(strokes)) };
   }
 
-  function showVerdict(res, via) {
+  function showVerdict(res) {
     state = 'verdict'; updateButtons();
     lab = res;
     const k = res.kind;
+    setVerify(k === 'pass' ? 'pass' : k === 'retry' ? 'retry' : 'fail');
     let head, stamp, line, cls = '';
     if (k === 'pass') {
       stamp = 'HUMAN'; head = 'ADMIT ONE';
@@ -303,7 +341,7 @@
       if (res.dyn.untrusted) line = 'Those pointer events were typed by a script, not a hand. Cute.';
     }
     say(line, k === 'pass' ? 'The verdict' : 'Madame Eyeball sniffs');
-    const meta = via ? via : `dynamics ${res.combined.toFixed(0)}/100${res.firstScore !== null ? ' (two samples averaged)' : ''} · shape ${res.shape.pass ? 'ok' : 'not a hand'} · ~${res.shape.estimatedFingers} fingers · analysed in ${res.evalMs ? res.evalMs.toFixed(0) : 0} ms`;
+    const meta = `dynamics ${res.combined.toFixed(0)}/100${res.firstScore !== null ? ' (two samples averaged)' : ''} · shape ${res.shape.pass ? 'ok' : 'not a hand'} · ~${res.shape.estimatedFingers} fingers · analysed in ${res.evalMs ? res.evalMs.toFixed(0) : 0} ms`;
     const again = k === 'pass' ? 'Another palm?' : 'Different prompt, go again';
     $('ticketWrap').innerHTML = `<div class="ticket ${cls}" role="status" aria-label="Verdict: ${stamp}. ${head}. ${line}">
       <h2><span class="stampword">${stamp}${k === 'pass' ? ':' : ':'}</span> ${head}</h2>
@@ -344,7 +382,7 @@
   }
   function closeLab() { labEl.classList.remove('open'); labEl.setAttribute('aria-hidden', 'true'); $('labBackdrop').classList.add('hidden'); cancelAnimationFrame(replayRaf); if (labReturnFocus && labReturnFocus.focus) labReturnFocus.focus(); }
   $('labLink').addEventListener('click', openLab); $('labClose').addEventListener('click', closeLab); $('labBackdrop').addEventListener('click', closeLab);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { if (!$('fallback').classList.contains('hidden')) closeFallback(); else if (labEl.classList.contains('open')) closeLab(); } });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && labEl.classList.contains('open')) closeLab(); });
 
   function fitCanvas(cv, h) {
     const dpr = Math.min(devicePixelRatio || 1, 2), w = cv.clientWidth || 560;
@@ -435,9 +473,9 @@
     const outcome = { pass: 'HUMAN: admitted', retry: 'one more try', shape: 'not recognised as a hand', flag: 'suspicious' }[lab.kind] || '';
     $('dialText').innerHTML = `<p><strong>Dynamics score ${sc.toFixed(1)} / 100</strong>${lab.firstScore !== null ? ` (average of two samples: ${lab.firstScore.toFixed(0)} and ${lab.dyn.score.toFixed(0)})` : ''}<br>Bands: ≥ ${Sc.K.PASS_SCORE} pass · ${Sc.K.RETRY_SCORE}–${Sc.K.PASS_SCORE} one more try · below ${Sc.K.RETRY_SCORE} flagged.<br>Final pass needs the shape check <em>and</em> the dynamics score.<br><strong>Outcome: ${outcome}.</strong>${lab.dyn.untrusted ? '<br>Score capped: script-dispatched events.' : ''}</p>`;
     const sh = lab.shape, d = sh.debug, ex = lab.prompt && lab.prompt.expectedRaisedFingers;
-    $('shapeText').innerHTML = `<p><strong>${sh.pass ? 'Passes' : 'Fails'}</strong> the shape check · confidence ${sh.confidence.toFixed(2)}<br>Estimated fingers (protrusions minus wrist): <strong>${sh.estimatedFingers}</strong>${ex === null || ex === undefined ? ' · prompt does not count fingers' : ` · prompt expects ${ex} ± ${Math.max(lab.prompt.tolerance, 1)}`}<br>${d ? `ink length ${d.inkLen.toFixed(0)} u · ink/perimeter ${d.inkRatio.toFixed(2)} · overdraw ${d.overdraw.toFixed(2)} · density ${d.density.toFixed(2)} · sharp turns/100u ${d.turnsPer100.toFixed(1)} · hull solidity ${d.solidity.toFixed(2)} · outline ${d.filled ? 'closed' : 'open'}` : ''}${sh.reasons.length ? '<br>Why not: ' + sh.reasons.join(' ') : ''}<br>Analysis time: ${lab.evalMs ? lab.evalMs.toFixed(1) : '?'} ms (the 1.5 s pause is theatre).</p>`;
+    $('shapeText').innerHTML = `<p><strong>${sh.pass ? 'Passes' : 'Fails'}</strong> the shape check · confidence ${sh.confidence.toFixed(2)}<br>Estimated fingers (protrusions minus wrist): <strong>${sh.estimatedFingers}</strong>${ex === null || ex === undefined ? ' · prompt does not count fingers' : ` · prompt expects ${ex} ± ${Math.max(lab.prompt.tolerance, 1)}`}<br>${d ? `ink length ${d.inkLen.toFixed(0)} u · ink/perimeter ${d.inkRatio.toFixed(2)} · overdraw ${d.overdraw.toFixed(2)} · density ${d.density.toFixed(2)} · sharp turns/100u ${d.turnsPer100.toFixed(1)} · hull solidity ${d.solidity.toFixed(2)} · outline ${d.filled ? 'closed' : 'open'}` : ''}${sh.reasons.length ? '<br>Why not: ' + sh.reasons.join(' ') : ''}<br>Analysis time: ${lab.evalMs ? lab.evalMs.toFixed(1) : '?'} ms.</p>`;
     renderReplayStatic(); renderSpeed(); renderScatter();
-    const rows = lab.dyn.features.map((x) => `<tr><td><strong>${x.name}</strong></td><td>${x.value}</td><td><span class="tag ${x.status}">${{ humanLike: 'human-like', neutral: 'neutral', botLike: 'bot-like' }[x.status]}</span></td><td>${x.applicable ? x.weight : 'skipped'}</td><td>${x.reason}</td></tr>`).join('');
+    const rows = lab.dyn.features.filter((x) => x.applicable).map((x) => `<tr><td><strong>${x.name}</strong></td><td>${x.value}</td><td><span class="tag ${x.status}">${{ humanLike: 'human-like', neutral: 'neutral', botLike: 'bot-like' }[x.status]}</span></td><td>${x.weight}</td><td>${x.reason}</td></tr>`).join('');
     $('featTable').innerHTML = `<tr><th>Feature</th><th>Measured</th><th>Tag</th><th>Weight</th><th>In plain English</th></tr>${rows}`;
   }
 
@@ -457,13 +495,11 @@
     closeLab();
     pendingFirstDyn = null;
     startRound(false);
-    const rand = Sy.rng(Date.now() & 0xffff), p = prompt || PROMPTS[0];
-    const [raised, thumb] = Sy.POSES[p.pose || 'wave']();
-    let poly = Sy.handOutline(raised, thumb, rand, 0.4);
-    poly = Sy.transform(poly, rand, 0.95 + rand() * 0.15, (rand() - 0.5) * 0.2, (rand() - 0.5) * 30, 0);
+    const rand = Sy.rng(Date.now() & 0xffff);
+    const poly = Sy.transform(ghostPoly, rand, 0.97 + rand() * 0.06, (rand() - 0.5) * 0.06, (rand() - 0.5) * 10, 0);   // bots trace the ghost
     const trusted = $('trustMask').checked;
-    const bs = kind === 'a' ? Sy.botA(poly, { trusted }) : kind === 'b' ? Sy.botB(poly, { trusted }) : Sy.botC(poly, { trusted, rand });
-    const names = { a: 'Straight lines at constant speed', b: 'Smooth spline at constant speed', c: 'Spline with random speed and jitter' };
+    const bs = kind === 'a' ? Sy.botA(poly, { trusted }) : Sy.botB(poly, { trusted });
+    const names = { a: 'Straight lines at constant speed', b: 'Smooth spline at constant speed' };
     say(`Bot ${kind}: ${names[kind]}. Watch it draw…`, 'Demo bot at work');
     botRunning = true; updateButtons();
     const t0s = bs[0].points[0].t, start = performance.now(), queue = bs.map((s) => ({ s, i: 0 }));
@@ -482,79 +518,15 @@
     })(start);
   }
 
-  // ───────────── accessible alternative ─────────────
-  const fb = $('fallback'); let fbReturn = null, beat = null;
-  function openFallback() { fbReturn = document.activeElement; fb.classList.remove('hidden'); $('fbMsg').textContent = ''; showTab('beat'); $('tabBeat').focus(); }
-  function closeFallback() { fb.classList.add('hidden'); beat = null; if (fbReturn && fbReturn.focus) fbReturn.focus(); }
-  $('fallbackLink').addEventListener('click', openFallback); $('fbClose').addEventListener('click', closeFallback);
-  fb.addEventListener('click', (e) => { if (e.target === fb) closeFallback(); });
-  function showTab(t) {
-    $('tabBeat').setAttribute('aria-selected', t === 'beat'); $('tabOdd').setAttribute('aria-selected', t === 'odd');
-    $('beatGame').classList.toggle('hidden', t !== 'beat'); $('oddGame').classList.toggle('hidden', t !== 'odd'); $('fbMsg').textContent = '';
-    if (t === 'odd') buildOdd();
-  }
-  $('tabBeat').addEventListener('click', () => showTab('beat')); $('tabOdd').addEventListener('click', () => showTab('odd'));
-
-  function passFallback(how) {
-    closeFallback(); startRoundQuiet();
-    showVerdict({ kind: 'pass', egg: null, shape: { pass: true, estimatedFingers: 0, confidence: 1, reasons: [], debug: null }, dyn: { score: 0, features: [], debug: { speeds: [], scatter: { pts: [], fit: null } } }, combined: 0, firstScore: null, prompt: null, strokes: [], evalMs: 0 }, how);
-    lab = null; renderLab();
-  }
-  function startRoundQuiet() { state = 'verdict'; $('coinOverlay').classList.add('hidden'); clearTimeout(timerHandle); }
-  const lamps = [...document.querySelectorAll('#lamps .lamp')];
-  $('beatPlay').addEventListener('click', () => {
-    snd.ensure();
-    const iv = [0, 1, 2].map(() => 380 + rnd(480)), at = [0, iv[0], iv[0] + iv[1], iv[0] + iv[1] + iv[2]];
-    beat = { iv, taps: [], playing: true, trusted: true };
-    $('beatTap').disabled = true; $('beatPlay').disabled = true; $('fbMsg').textContent = 'Listen…';
-    at.forEach((t, i) => setTimeout(() => { lamps[i].classList.add('on'); snd.beep(520 + i * 90); setTimeout(() => lamps[i].classList.remove('on'), 200); }, 300 + t));
-    setTimeout(() => { beat.playing = false; $('beatTap').disabled = false; $('beatTap').focus(); $('fbMsg').textContent = 'Your turn: tap four times.'; }, 300 + at[3] + 350);
-  });
-  function beatTap(ev) {
-    if (!beat || beat.playing) return;
-    if (ev.isTrusted === false) beat.trusted = false;
-    beat.taps.push(ev.timeStamp); const i = beat.taps.length - 1; lamps[i % 4].classList.add('on'); setTimeout(() => lamps[i % 4].classList.remove('on'), 160); snd.beep(520 + i * 90);
-    if (beat.taps.length < 4) { $('fbMsg').textContent = `${beat.taps.length} of 4…`; return; }
-    const u = [1, 2, 3].map((k) => beat.taps[k] - beat.taps[k - 1]);
-    const err = u.reduce((a, x, k) => a + Math.abs(x - beat.iv[k]) / beat.iv[k], 0) / 3;
-    const ok = beat.trusted && err <= 0.45 && err >= 0.008;
-    $('beatPlay').disabled = false; $('beatTap').disabled = true;
-    const trusted = beat.trusted; beat = null;
-    if (ok) passFallback(`passed the beat game (timing error ${(err * 100).toFixed(0)}%). No drawing was analysed, so this path is weaker.`);
-    else $('fbMsg').textContent = !trusted ? 'Those taps were scripted. Nice try.' : err < 0.008 ? 'Frighteningly exact. Humans are a little off. Play it again.' : 'Off the beat. Press play and have another go.';
-  }
-  $('beatTap').addEventListener('click', beatTap);
-  document.addEventListener('keydown', (e) => { if (e.code === 'Space' && !fb.classList.contains('hidden') && beat && !beat.playing && !$('beatGame').classList.contains('hidden')) { e.preventDefault(); beatTap(e); } });
-
-  function handGlyph(n, seed) {
-    let s = ''; const r = Sy.rng(seed);
-    for (let i = 0; i < n; i++) { const x = 20 + i * (60 / Math.max(1, n - 1 || 1)) * (n > 1 ? 1 : 0) + (n === 1 ? 30 : 0), top = 14 + r() * 14, w = Math.min(15, 60 / n - 3); s += `<rect x="${(x - w / 2 + 10).toFixed(1)}" y="${top.toFixed(1)}" width="${w.toFixed(1)}" height="${(52 - top).toFixed(1)}" rx="${(w / 2).toFixed(1)}" fill="#fffdf4" stroke="#1c1a17" stroke-width="2.6"/>`; }
-    return `<svg viewBox="0 0 100 90" aria-hidden="true"><path d="M20 90 L24 56 C24 48 76 48 78 56 L82 90 Z" fill="#fffdf4" stroke="#1c1a17" stroke-width="2.6" transform="rotate(${(r() * 6 - 3).toFixed(1)} 50 70)"/>${s}</svg>`;
-  }
-  function buildOdd() {
-    const base = 3 + rnd(3), odd = base + (Math.random() < 0.5 ? -1 : 1), oddIdx = rnd(6), grid = $('oddGrid'); grid.innerHTML = '';
-    for (let i = 0; i < 6; i++) {
-      const n = i === oddIdx ? odd : base, b = document.createElement('button'); b.type = 'button';
-      b.setAttribute('aria-label', `Picture ${i + 1} of 6: a hand with ${n} fingers`); b.innerHTML = handGlyph(n, 100 + i * 7 + rnd(50));
-      const born = performance.now();
-      b.addEventListener('click', (ev) => {
-        const quick = performance.now() - born < 350;
-        if (i === oddIdx && ev.isTrusted && !quick) passFallback('picked the odd hand out. No drawing was analysed, so this path is weaker.');
-        else { $('fbMsg').textContent = ev.isTrusted ? (quick ? 'Too quick. Take a proper look.' : 'Not that one. A fresh set is up.') : 'Scripted click. Cute.'; buildOdd(); }
-      });
-      grid.appendChild(b);
-    }
-  }
-
   // ───────────── debug hooks (used by tests, handy in the console) ─────────────
   window.PalmApp = {
-    getStrokes: () => strokes, getLab: () => lab, getState: () => state, getPrompt: () => prompt,
+    getStrokes: () => strokes, getLab: () => lab, getState: () => state, getPrompt: () => prompt, getGhost: () => ghostPoly,
     setStrokes: (s) => { strokes = s; redraw(); updateButtons(); }, submit, startRound,
     analyze: () => ({ shape: Sh.check(strokes, prompt), dyn: Sc.analyze(strokes) }),
   };
 
   // initial paint
-  setMascot('idle'); resize(); updateButtons();
+  setMascot('idle'); setVerify('idle'); makeGhost('wave'); resize(); updateButtons();
   requestAnimationFrame(resize);
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { resize(); });
 })();

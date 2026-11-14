@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Palm Reader — Madame Eyeball's Booth</title>
-<meta name="description" content="Draw a hand. A fortune teller decides whether a human drew it. A stroke-dynamics CAPTCHA demo.">
+<title>Palm Reader — Prove You're Human</title>
+<meta name="description" content="Prove you're human by drawing a hand. A stroke-dynamics CAPTCHA that reads how you draw, not just what.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Gaegu:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -29,10 +29,9 @@
   <div class="masthead-inner">
     <div>
       <h1><span>Palm</span><span class="drop">Reader</span></h1>
-      <p class="tagline">Madame Eyeball's booth · pier end · humans admitted, mostly</p>
+      <p class="tagline">The CAPTCHA that reads your palm · humans admitted, bots turned away</p>
     </div>
     <div class="mast-tools">
-      <span class="sticker">Prototype, not a lock</span>
       <button class="mini-btn" id="soundBtn" type="button" aria-pressed="false">Sound: off</button>
     </div>
   </div>
@@ -42,7 +41,7 @@
   <section class="reader" aria-label="The fortune teller">
     <div class="bubble wobble" id="bubbleBox">
       <span class="tag" id="bubbleTag">Madame Eyeball says</span>
-      <div id="bubble" role="status" aria-live="polite">Closed for the evening. Unless you have a palm…</div>
+      <div id="bubble" role="status" aria-live="polite">Humans only past this point. Prove it: draw me a hand.</div>
     </div>
 
     <div class="mascot-wrap">
@@ -109,18 +108,25 @@
     </div>
   </section>
 
-  <section class="table" aria-label="Drawing table">
+  <section class="table" aria-label="Human verification">
+    <div class="verify-bar" id="verifyBar" data-state="idle">
+      <span class="vb-box" aria-hidden="true"><svg viewBox="0 0 24 24"><path class="vb-tick" d="M4 12.5l5 5L20 6"/><path class="vb-x" d="M6 6l12 12M18 6L6 18"/></svg></span>
+      <div class="vb-text">
+        <h2 class="vb-title">Prove you're human</h2>
+        <p><strong id="verifyHead">Not verified</strong> · <span id="verifyStatus" role="status" aria-live="polite">Press the button and draw a hand to continue.</span></p>
+      </div>
+      <span class="vb-brand" aria-hidden="true">PALM<b>CHECK</b><small>human verification</small></span>
+    </div>
     <div class="pad-shell">
       <div class="pad" id="pad">
         <div class="tape a" aria-hidden="true"></div><div class="tape b" aria-hidden="true"></div><div class="tape c" aria-hidden="true"></div>
         <svg id="hint" viewBox="0 0 600 450" aria-hidden="true" preserveAspectRatio="none">
-          <path fill="none" stroke="#1c1a17" stroke-width="3.5" stroke-dasharray="2 9" stroke-linecap="round" stroke-linejoin="round"
-            d="M245 425 L245 345 L200 320 L199 245 C200 218 205 214 217 214 C229 214 234 218 234 245 L248 245 C250 218 252 190 262 185 C272 180 282 184 282 210 L282 245 C282 200 284 135 296 130 C308 125 318 135 316 170 L316 245 C316 200 318 150 330 148 C342 146 350 160 350 200 L350 245 L364 252 C364 290 364 300 370 310 C400 280 425 215 440 222 C452 228 448 245 420 285 L385 335 L350 345 L350 425"/>
+          <path id="hintPath" fill="none" stroke="#1c1a17" stroke-width="3.5" stroke-dasharray="2 9" stroke-linecap="round" stroke-linejoin="round" d=""/>
         </svg>
         <canvas id="fx" aria-hidden="true"></canvas>
-        <canvas id="ink" role="img" aria-label="Drawing pad. Draw the hand described by the fortune teller using a mouse, finger or pen. If you cannot draw, use the 'I can't draw right now' link below."></canvas>
+        <canvas id="ink" role="img" aria-label="Drawing pad. Draw the hand described by the fortune teller using a mouse, finger or pen."></canvas>
         <div class="pad-border wobble" aria-hidden="true"></div>
-        <div class="overlay coin-overlay" id="coinOverlay"><button class="coin" id="startBtn" type="button">Insert palm</button></div>
+        <div class="overlay coin-overlay" id="coinOverlay"><button class="coin" id="startBtn" type="button">I'm human. Prove it.</button></div>
         <div class="overlay think-overlay hidden" id="thinkOverlay"><span>Reading the lines…</span></div>
       </div>
     </div>
@@ -131,7 +137,6 @@
       <button class="btn done" id="doneBtn" type="button" disabled>That's my hand</button>
     </div>
     <div class="sidelinks">
-      <button class="linkbtn" id="fallbackLink" type="button">I can't draw right now</button>
       <button class="linkbtn" id="labLink" type="button">Peek behind the curtain</button>
     </div>
   </section>
@@ -164,49 +169,21 @@
     <h3>Every feature, explained</h3>
     <table class="ft" id="featTable"></table>
   </div>
-  <h3>Be the bot (demo)</h3>
-  <p class="note">Watch a script draw on the pad and see which signals give it away. (c) is the hardest to catch, and a recorded human replay would likely sail through. This is one layer, not a wall.</p>
+  <h3>Be the bot</h3>
+  <p class="note">Watch a script draw on the pad and see which signals give it away.</p>
   <div class="row">
     <button class="btn" data-bot="a" type="button">(a) Straight lines, constant speed</button>
     <button class="btn" data-bot="b" type="button">(b) Smooth spline, constant speed</button>
-    <button class="btn" data-bot="c" type="button">(c) Spline, random speed + jitter</button>
   </div>
-  <label class="inline"><input type="checkbox" id="trustMask" checked> Pretend events are trusted (like OS-level automation). Untick to see the <code>isTrusted</code> check catch a script instantly.</label>
+  <label class="inline check"><input type="checkbox" id="trustMask" checked><span>Pretend events are trusted (like OS-level automation). Untick to see the <code>isTrusted</code> check catch a script instantly.</span></label>
   <h3>Raw strokes</h3>
   <div class="row"><button class="btn" id="exportBtn" type="button">Export stroke JSON</button><span id="exportMsg" role="status"></span></div>
 </aside>
-
-<!-- ───────────── accessible alternative ───────────── -->
-<div class="modal hidden" id="fallback" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
-  <div class="modal-card wobble">
-    <button class="mini-btn close" id="fbClose" type="button">Close</button>
-    <h2 id="fbTitle">Can't draw? Fine.</h2>
-    <p>Pick a party trick instead. Both are short and neither needs a steady hand.</p>
-    <div class="tabs" role="tablist">
-      <button class="mini-btn" role="tab" id="tabBeat" aria-selected="true" type="button">Tap the beat</button>
-      <button class="mini-btn" role="tab" id="tabOdd" aria-selected="false" type="button">Odd one out</button>
-    </div>
-    <div id="beatGame">
-      <p id="beatInstr">Watch (and listen to) four taps, then tap them back with the button or the space bar.</p>
-      <div class="beat" id="lamps" aria-hidden="true"><span class="lamp"></span><span class="lamp"></span><span class="lamp"></span><span class="lamp"></span></div>
-      <div class="row" style="display:flex;gap:12px;flex-wrap:wrap">
-        <button class="btn" id="beatPlay" type="button">Play the pattern</button>
-        <button class="btn" id="beatTap" type="button" disabled>Tap (or space)</button>
-      </div>
-    </div>
-    <div id="oddGame" class="hidden">
-      <p id="oddInstr">One of these hands has a different number of fingers. Pick it.</p>
-      <div class="odd-grid" id="oddGrid"></div>
-    </div>
-    <p id="fbMsg" role="status"></p>
-  </div>
-</div>
 
 <canvas id="confetti" aria-hidden="true"></canvas>
 
 <footer>
   <p><strong>Privacy:</strong> your strokes stay in this browser tab. Nothing you draw is sent anywhere. (The page does ask Google Fonts for typefaces; that request carries no drawing data.)</p>
-  <p><strong>Honest scope:</strong> a demo of stroke-dynamics analysis. Scoring runs in your browser, so anyone who edits this page can skip it, and a determined attacker replaying recorded human strokes can fool it. A real deployment scores on a server and combines other signals. See README.</p>
 </footer>
 
 <script src="scoring.js"></script>

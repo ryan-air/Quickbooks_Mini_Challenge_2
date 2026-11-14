@@ -1,5 +1,5 @@
 /*
- * synth.js — synthetic hands and the three built-in "Be the bot" drawers.
+ * synth.js — synthetic hands and the two built-in "Be the bot" drawers.
  * Used by the Lab panel and by test/run.js. Coordinates are pad units (600 x 450).
  */
 (function (root, factory) {
@@ -53,12 +53,20 @@
     fist: () => [[false, false, false, false], 'in'],
     spread: () => [[true, true, true, true], 'out'],
     point: () => [[false, false, false, true], 'in'],
+    four: () => [[true, true, true, true], 'in'],
+    pinky: () => [[true, false, false, false], 'in'],
+    shaka: () => [[true, false, false, false], 'out'],
+    gun: () => [[false, false, false, true], 'out'],
+    threeThumb: () => [[false, false, true, true], 'out'],
+    loveYou: () => [[true, false, false, true], 'out'],
   };
 
   function transform(poly, rand, scale, rot, dx, dy) {
     const cx = 300, cy = 290, c = Math.cos(rot), s = Math.sin(rot);
     return poly.map((p) => { const x = (p.x - cx) * scale, y = (p.y - cy) * scale; return { x: cx + dx + x * c - y * s, y: cy + dy + x * s + y * c }; });
   }
+  // left hand <-> right hand (flip about the pad's vertical centre line)
+  function mirror(poly) { return poly.map((p) => ({ x: 600 - p.x, y: p.y })); }
 
   // geometry utils
   const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -113,26 +121,5 @@
     const pts = sampleStroke(sp, opts.t0 || 1000, () => 420, () => 16, 0, null);
     return [{ pointerType: 'mouse', trusted: opts.trusted !== false, points: pts }];
   }
-  // (c) smoothed spline, randomised speed profile, Gaussian jitter on position and time
-  function botC(poly, opts) {
-    opts = opts || {};
-    const rand = opts.rand || rng(opts.seed || 7);
-    const sp = chaikin(poly, 3, false);
-    const n = 2 + Math.floor(rand() * 2);                // 2-3 strokes with pauses
-    const c = cumLen(sp), L = c[c.length - 1];
-    const strokes = [];
-    let t = opts.t0 || 1000;
-    for (let i = 0; i < n; i++) {
-      const a = (L * i) / n, b = (L * (i + 1)) / n, seg = [];
-      for (let s = a; s <= b; s += 3) seg.push(pointAt(sp, c, s));
-      const base = 330 + rand() * 180, ph = rand() * 6.28, ph2 = rand() * 6.28;
-      const speed = (u) => base * (0.18 + 0.82 * Math.pow(Math.sin(Math.PI * Math.min(0.999, Math.max(0.001, u))), 0.8)) * (1 + 0.25 * Math.sin(ph + u * 11) + 0.15 * Math.sin(ph2 + u * 23));
-      const pts = sampleStroke(seg, t, speed, () => Math.max(6, 16 + rand.gauss() * 2.2), 0.8, rand);
-      strokes.push({ pointerType: 'mouse', trusted: opts.trusted !== false, points: pts });
-      t = pts[pts.length - 1].t + 180 + rand() * 260;
-    }
-    return strokes;
-  }
-
-  return { rng, handOutline, POSES, transform, chaikin, cumLen, pointAt, sampleStroke, botA, botB, botC, dist };
+  return { rng, handOutline, POSES, transform, mirror, chaikin, cumLen, pointAt, sampleStroke, botA, botB, dist };
 });

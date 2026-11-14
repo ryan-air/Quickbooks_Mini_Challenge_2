@@ -20,4 +20,4 @@ Goal: verify the 95% human-pass target on real people and devices, then retune. 
 ## Decide
 - Target: 95% or more reach a final pass (a "one more try" that then passes counts, but note it).
 - If a device class fails, loosen that feature's constants in `scoring.js` before touching weights. Likely culprits: timestamp rhythm on frame-locked browsers, tremor on touch, speed-curvature on trackpads.
-- Re-run the bot table afterwards and report any change in how often bot (c) gets through.
+- Re-run the bot table afterwards and report any change in how often bots (a) and (b) are flagged.
