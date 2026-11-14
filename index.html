@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Palm Reader — Madame Eyeball's Booth</title>
+<meta name="description" content="Draw a hand. A fortune teller decides whether a human drew it. A stroke-dynamics CAPTCHA demo.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Gaegu:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- hand-made edge filters (displacement = wobble) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <filter id="wobble" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.022" numOctaves="2" seed="8" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="5" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+  <filter id="wobble-strong" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" seed="3" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="8" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+<div class="paper-grain" aria-hidden="true"></div>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <div>
+      <h1><span>Palm</span><span class="drop">Reader</span></h1>
+      <p class="tagline">Madame Eyeball's booth · pier end · humans admitted, mostly</p>
+    </div>
+    <div class="mast-tools">
+      <span class="sticker">Prototype, not a lock</span>
+      <button class="mini-btn" id="soundBtn" type="button" aria-pressed="false">Sound: off</button>
+    </div>
+  </div>
+</header>
+
+<main class="booth">
+  <section class="reader" aria-label="The fortune teller">
+    <div class="bubble wobble" id="bubbleBox">
+      <span class="tag" id="bubbleTag">Madame Eyeball says</span>
+      <div id="bubble" role="status" aria-live="polite">Closed for the evening. Unless you have a palm…</div>
+    </div>
+
+    <div class="mascot-wrap">
+      <!-- lopsided hand with an eye in the palm. Four states, no symmetry on purpose. -->
+      <svg class="mascot" id="mascot" data-state="idle" viewBox="0 0 240 300" role="img" aria-label="A cartoon hand with an eye in the palm: Madame Eyeball">
+        <defs>
+          <clipPath id="eyeClip"><path d="M90 215 C103 193 141 194 157 213 C141 237 103 237 90 215 Z"/></clipPath>
+        </defs>
+        <!-- pink misregistered under-layer -->
+        <g fill="#ff3f8e" opacity=".85" transform="translate(5 4)">
+          <path d="M62 168 C50 190 52 232 70 252 C92 276 150 280 176 252 C198 228 196 196 190 170 C168 160 100 156 62 168 Z"/>
+          <path d="M70 168 C64 140 60 112 66 92 C70 80 86 82 88 94 C92 116 94 140 96 164 Z"/>
+          <path d="M96 162 C94 130 96 90 102 66 C106 54 122 56 124 68 C128 96 126 134 124 162 Z"/>
+          <path d="M124 162 C128 130 134 100 142 84 C148 74 162 78 160 90 C158 114 154 140 152 166 Z"/>
+          <path d="M152 166 C156 146 168 128 180 118 C188 112 198 120 192 130 C184 148 182 160 184 172 Z"/>
+          <path d="M62 176 C44 166 26 156 14 134 C8 122 20 114 28 122 C40 138 54 146 70 150 Z"/>
+        </g>
+        <!-- palm + fingers (cream) with uneven outlines -->
+        <g fill="#fffdf4" stroke="#1c1a17" stroke-linejoin="round" stroke-linecap="round">
+          <path stroke-width="4.5" d="M62 168 C50 190 52 232 70 252 C92 276 150 280 176 252 C198 228 196 196 190 170 C168 160 100 156 62 168 Z"/>
+          <path stroke-width="3.5" d="M70 168 C64 140 60 112 66 92 C70 80 86 82 88 94 C92 116 94 140 96 164 Z"/>
+          <path stroke-width="5" d="M96 162 C94 130 96 90 102 66 C106 54 122 56 124 68 C128 96 126 134 124 162 Z"/>
+          <path stroke-width="3" d="M124 162 C128 130 134 100 142 84 C148 74 162 78 160 90 C158 114 154 140 152 166 Z"/>
+          <path stroke-width="4" d="M152 166 C156 146 168 128 180 118 C188 112 198 120 192 130 C184 148 182 160 184 172 Z"/>
+          <path stroke-width="3.5" d="M62 176 C44 166 26 156 14 134 C8 122 20 114 28 122 C40 138 54 146 70 150 Z"/>
+          <!-- life line (wobbly, deliberately) -->
+          <path fill="none" stroke-width="2.5" d="M80 178 C72 200 78 224 96 246"/>
+          <path fill="none" stroke-width="2" d="M148 180 C160 188 170 200 168 214"/>
+          <!-- knuckle ticks -->
+          <path fill="none" stroke-width="2" d="M73 112 l9 1 M104 88 l12 -1 M141 104 l9 2"/>
+        </g>
+        <!-- cuff -->
+        <path d="M52 266 C80 258 150 262 190 262 L204 296 L40 298 Z" fill="#1f3fd0" stroke="#1c1a17" stroke-width="4" stroke-linejoin="round"/>
+        <g fill="#ffd23a" stroke="#1c1a17" stroke-width="1.5"><circle cx="84" cy="281" r="4.5"/><circle cx="118" cy="277" r="3.5"/><circle cx="154" cy="283" r="5"/><circle cx="182" cy="278" r="3"/></g>
+
+        <!-- the eye -->
+        <path d="M90 215 C103 193 141 194 157 213 C141 237 103 237 90 215 Z" fill="#fffdf4" stroke="#1c1a17" stroke-width="3.5"/>
+        <g clip-path="url(#eyeClip)">
+          <g class="st st-idle"><g class="pupil-idle"><circle cx="124" cy="214" r="13" fill="#1f3fd0" stroke="#1c1a17" stroke-width="2"/><circle cx="124" cy="214" r="6" fill="#1c1a17"/><circle cx="119" cy="209" r="2.5" fill="#fffdf4"/></g></g>
+          <g class="st st-thinking"><g class="pupil-think"><circle cx="124" cy="214" r="11" fill="#ff3f8e" stroke="#1c1a17" stroke-width="2"/><circle cx="124" cy="214" r="5" fill="#1c1a17"/></g></g>
+          <g class="st st-smug"><circle cx="131" cy="208" r="12" fill="#1f3fd0" stroke="#1c1a17" stroke-width="2"/><circle cx="131" cy="208" r="5.5" fill="#1c1a17"/><circle cx="127" cy="204" r="2" fill="#fffdf4"/></g>
+          <g class="st st-delighted"><circle cx="124" cy="215" r="16" fill="#1f3fd0" stroke="#1c1a17" stroke-width="2"/><circle cx="124" cy="215" r="8" fill="#1c1a17"/><circle cx="118" cy="209" r="3.5" fill="#fffdf4"/><circle cx="130" cy="221" r="2" fill="#fffdf4"/></g>
+          <!-- blink lid + smug half-lid -->
+          <rect class="lid" x="84" y="190" width="80" height="50" fill="#fffdf4" style="transform:scaleY(0)"/>
+          <g class="st st-smug"><path d="M84 188 L168 188 L168 209 C150 201 120 200 84 214 Z" fill="#fffdf4"/><path d="M92 213 C112 202 138 201 156 211" fill="none" stroke="#1c1a17" stroke-width="4"/></g>
+        </g>
+        <path d="M90 215 C103 193 141 194 157 213 C141 237 103 237 90 215 Z" fill="none" stroke="#1c1a17" stroke-width="3.5"/>
+        <!-- lashes, uneven -->
+        <path d="M96 205 l-6 -8 M108 197 l-3 -10 M124 194 l1 -11 M140 197 l5 -9 M152 205 l8 -6" fill="none" stroke="#1c1a17" stroke-width="2.6" stroke-linecap="round"/>
+        <!-- brows per state -->
+        <g class="st st-smug"><path d="M96 180 C112 172 132 172 150 166" fill="none" stroke="#1c1a17" stroke-width="5" stroke-linecap="round"/></g>
+        <g class="st st-delighted"><path d="M92 184 C108 170 138 170 156 184" fill="none" stroke="#1c1a17" stroke-width="4" stroke-linecap="round"/><path d="M60 100 l-14 -10 M66 68 l-12 -14 M175 64 l8 -16 M204 96 l16 -8 M212 138 l16 2" fill="none" stroke="#ff3f8e" stroke-width="4.5" stroke-linecap="round"/></g>
+        <!-- thinking swirls -->
+        <g class="st st-thinking" fill="none" stroke="#1f3fd0" stroke-width="3" stroke-linecap="round">
+          <path class="swirl" d="M70 214 C70 180 110 168 140 176 C176 186 182 226 160 244" stroke-dasharray="14 9"/>
+          <path class="swirl2" d="M82 232 C100 256 148 256 168 232 C182 214 172 190 150 184" stroke="#ff3f8e" stroke-dasharray="9 12"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="timer" id="timer" aria-hidden="true">
+      <svg viewBox="0 0 54 54"><circle class="ring-bg" cx="27" cy="27" r="22" fill="none" stroke-width="7"/><circle class="ring" id="ring" cx="27" cy="27" r="22" fill="none" stroke-width="7" stroke-dasharray="138.2" stroke-dashoffset="0"/></svg>
+      <div class="tlabel" id="tlabel">20 s of pressure, 0 s of consequences</div>
+    </div>
+  </section>
+
+  <section class="table" aria-label="Drawing table">
+    <div class="pad-shell">
+      <div class="pad" id="pad">
+        <div class="tape a" aria-hidden="true"></div><div class="tape b" aria-hidden="true"></div><div class="tape c" aria-hidden="true"></div>
+        <svg id="hint" viewBox="0 0 600 450" aria-hidden="true" preserveAspectRatio="none">
+          <path fill="none" stroke="#1c1a17" stroke-width="3.5" stroke-dasharray="2 9" stroke-linecap="round" stroke-linejoin="round"
+            d="M245 425 L245 345 L200 320 L199 245 C200 218 205 214 217 214 C229 214 234 218 234 245 L248 245 C250 218 252 190 262 185 C272 180 282 184 282 210 L282 245 C282 200 284 135 296 130 C308 125 318 135 316 170 L316 245 C316 200 318 150 330 148 C342 146 350 160 350 200 L350 245 L364 252 C364 290 364 300 370 310 C400 280 425 215 440 222 C452 228 448 245 420 285 L385 335 L350 345 L350 425"/>
+        </svg>
+        <canvas id="fx" aria-hidden="true"></canvas>
+        <canvas id="ink" role="img" aria-label="Drawing pad. Draw the hand described by the fortune teller using a mouse, finger or pen. If you cannot draw, use the 'I can't draw right now' link below."></canvas>
+        <div class="pad-border wobble" aria-hidden="true"></div>
+        <div class="overlay coin-overlay" id="coinOverlay"><button class="coin" id="startBtn" type="button">Insert palm</button></div>
+        <div class="overlay think-overlay hidden" id="thinkOverlay"><span>Reading the lines…</span></div>
+      </div>
+    </div>
+    <div class="controls">
+      <button class="btn stamp" id="undoBtn" type="button" disabled>Undo</button>
+      <button class="btn wipe" id="clearBtn" type="button" disabled>Wipe the slate</button>
+      <label class="toggle"><input type="checkbox" id="hintToggle" checked> Ghost hand</label>
+      <button class="btn done" id="doneBtn" type="button" disabled>That's my hand</button>
+    </div>
+    <div class="sidelinks">
+      <button class="linkbtn" id="fallbackLink" type="button">I can't draw right now</button>
+      <button class="linkbtn" id="labLink" type="button">Peek behind the curtain</button>
+    </div>
+  </section>
+
+  <section class="ticket-wrap" id="ticketWrap" aria-live="polite"></section>
+</main>
+
+<!-- ───────────── Lab drawer ───────────── -->
+<div class="backdrop hidden" id="labBackdrop"></div>
+<aside class="lab" id="lab" role="dialog" aria-modal="false" aria-labelledby="labTitle" aria-hidden="true" tabindex="-1">
+  <button class="mini-btn close" id="labClose" type="button">Close notebook</button>
+  <h2 id="labTitle">Lab notes</h2>
+  <p>Everything the booth measured, in plain view. Nothing here leaves your browser.</p>
+  <div id="labEmpty" class="note">Nothing to dissect yet. Draw something, press the big pink button, or unleash a bot below.</div>
+  <div id="labBody" class="hidden">
+    <h3>The verdict</h3>
+    <div class="dial">
+      <svg id="dial" viewBox="0 0 160 100" aria-hidden="true"></svg>
+      <div id="dialText"></div>
+    </div>
+    <h3>Shape check</h3>
+    <div id="shapeText"></div>
+    <div class="row"><button class="btn" id="replayBtn" type="button">Replay in original timing</button><label class="inline"><input type="checkbox" id="overlayToggle" checked> Show hull &amp; fingertips</label></div>
+    <canvas id="replayCv" width="600" height="450" aria-label="Replay of the drawing with convex hull and detected fingertips"></canvas>
+    <h3>Speed over time</h3>
+    <canvas id="speedCv" height="190" aria-label="Chart of drawing speed over time, one line per stroke"></canvas>
+    <h3>Speed vs. curvature</h3>
+    <canvas id="curvCv" height="220" aria-label="Scatter plot of log speed against log radius of curvature with fitted line"></canvas>
+    <p id="curvNote"></p>
+    <h3>Every feature, explained</h3>
+    <table class="ft" id="featTable"></table>
+  </div>
+  <h3>Be the bot (demo)</h3>
+  <p class="note">Watch a script draw on the pad and see which signals give it away. (c) is the hardest to catch, and a recorded human replay would likely sail through. This is one layer, not a wall.</p>
+  <div class="row">
+    <button class="btn" data-bot="a" type="button">(a) Straight lines, constant speed</button>
+    <button class="btn" data-bot="b" type="button">(b) Smooth spline, constant speed</button>
+    <button class="btn" data-bot="c" type="button">(c) Spline, random speed + jitter</button>
+  </div>
+  <label class="inline"><input type="checkbox" id="trustMask" checked> Pretend events are trusted (like OS-level automation). Untick to see the <code>isTrusted</code> check catch a script instantly.</label>
+  <h3>Raw strokes</h3>
+  <div class="row"><button class="btn" id="exportBtn" type="button">Export stroke JSON</button><span id="exportMsg" role="status"></span></div>
+</aside>
+
+<!-- ───────────── accessible alternative ───────────── -->
+<div class="modal hidden" id="fallback" role="dialog" aria-modal="true" aria-labelledby="fbTitle">
+  <div class="modal-card wobble">
+    <button class="mini-btn close" id="fbClose" type="button">Close</button>
+    <h2 id="fbTitle">Can't draw? Fine.</h2>
+    <p>Pick a party trick instead. Both are short and neither needs a steady hand.</p>
+    <div class="tabs" role="tablist">
+      <button class="mini-btn" role="tab" id="tabBeat" aria-selected="true" type="button">Tap the beat</button>
+      <button class="mini-btn" role="tab" id="tabOdd" aria-selected="false" type="button">Odd one out</button>
+    </div>
+    <div id="beatGame">
+      <p id="beatInstr">Watch (and listen to) four taps, then tap them back with the button or the space bar.</p>
+      <div class="beat" id="lamps" aria-hidden="true"><span class="lamp"></span><span class="lamp"></span><span class="lamp"></span><span class="lamp"></span></div>
+      <div class="row" style="display:flex;gap:12px;flex-wrap:wrap">
+        <button class="btn" id="beatPlay" type="button">Play the pattern</button>
+        <button class="btn" id="beatTap" type="button" disabled>Tap (or space)</button>
+      </div>
+    </div>
+    <div id="oddGame" class="hidden">
+      <p id="oddInstr">One of these hands has a different number of fingers. Pick it.</p>
+      <div class="odd-grid" id="oddGrid"></div>
+    </div>
+    <p id="fbMsg" role="status"></p>
+  </div>
+</div>
+
+<canvas id="confetti" aria-hidden="true"></canvas>
+
+<footer>
+  <p><strong>Privacy:</strong> your strokes stay in this browser tab. Nothing you draw is sent anywhere. (The page does ask Google Fonts for typefaces; that request carries no drawing data.)</p>
+  <p><strong>Honest scope:</strong> a demo of stroke-dynamics analysis. Scoring runs in your browser, so anyone who edits this page can skip it, and a determined attacker replaying recorded human strokes can fool it. A real deployment scores on a server and combines other signals. See README.</p>
+</footer>
+
+<script src="scoring.js"></script>
+<script src="shape.js"></script>
+<script src="synth.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
